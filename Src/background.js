@@ -54,9 +54,165 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     sendResponse({ ok: true });
   } else if (act === 'getQueueStatus') {
     sendResponse(getQueueStatus());
+  } else if (act === 'fetchImageAsDataUrl') {
+    fetchImageAsDataUrl(message.url, message.pageUrl).then(sendResponse);
+    return true; // async
+  } else if (act === 'probeImages') {
+    probeImagesInBackground(message.urls, message.pageUrl).then(sendResponse);
+    return true; // async
+  } else if (act === 'setThumbReferers') {
+    setThumbReferers(message.urls, message.pageUrl).then(function() { sendResponse({ ok: true }); });
+    return true; // async
   }
   return false;
 });
+
+/* ---- Image Proxy (service worker has full host permissions) ---- */
+
+async function fetchImageAsDataUrl(url, pageUrl) {
+  try {
+    /* Set correct Referer via declarativeNetRequest before fetch */
+    if (pageUrl) {
+      await setRefererRule(url, pageUrl);
+    }
+    var resp = await fetch(url, { credentials: 'omit', redirect: 'follow' });
+    if (pageUrl) {
+      setTimeout(function() { cleanupRefererRule(url); }, 5000);
+    }
+    if (!resp.ok) return { dataUrl: null };
+    var blob = await resp.blob();
+    if (!blob.type || !blob.type.startsWith('image')) {
+      return { dataUrl: null };
+    }
+    /* For large images, resize first to keep data URL small */
+    var ab, mime;
+    try {
+      var bmp = await createImageBitmap(blob);
+      var w = bmp.width, h = bmp.height;
+      var scale = Math.min(200 / w, 200 / h, 1);
+      var tw = Math.round(w * scale) || 1;
+      var th = Math.round(h * scale) || 1;
+      var osc = new OffscreenCanvas(tw, th);
+      osc.getContext('2d').drawImage(bmp, 0, 0, tw, th);
+      bmp.close();
+      var tBlob = await osc.convertToBlob({ type: 'image/jpeg', quality: 0.7 });
+      ab = await tBlob.arrayBuffer();
+      mime = 'image/jpeg';
+    } catch (e) {
+      /* OffscreenCanvas failed, use raw blob (might be large) */
+      ab = await blob.arrayBuffer();
+      mime = blob.type || 'image/jpeg';
+    }
+    /* Convert ArrayBuffer to base64 in chunks to avoid stack overflow */
+    var bytes = new Uint8Array(ab);
+    var chunkSize = 8192;
+    var parts = [];
+    for (var i = 0; i < bytes.length; i += chunkSize) {
+      var chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+      parts.push(String.fromCharCode.apply(null, chunk));
+    }
+    var b64 = btoa(parts.join(''));
+    return { dataUrl: 'data:' + mime + ';base64,' + b64 };
+  } catch (e) {
+    return { dataUrl: null };
+  }
+}
+
+async function probeImagesInBackground(urls, pageUrl) {
+  var results = {};
+  var BATCH = 3;
+  for (var i = 0; i < urls.length; i += BATCH) {
+    var batch = urls.slice(i, i + BATCH);
+    /* Set Referer rules for all URLs in this batch */
+    if (pageUrl) {
+      await Promise.all(batch.map(function(url) { return setRefererRule(url, pageUrl); }));
+    }
+    await Promise.all(batch.map(async function(url) {
+      try {
+        var resp = await fetch(url, { credentials: 'omit', redirect: 'follow' });
+        if (!resp.ok) { results[url] = { width: -1, height: -1, thumbUrl: null }; return; }
+        var blob = await resp.blob();
+        if (!blob.type || !blob.type.startsWith('image')) {
+          results[url] = { width: -1, height: -1, thumbUrl: null };
+          return;
+        }
+        /* Use createImageBitmap (available in service worker) for dimensions */
+        var bmp = await createImageBitmap(blob);
+        var w = bmp.width;
+        var h = bmp.height;
+        /* Generate thumbnail data URL using the same bitmap */
+        var thumbUrl = null;
+        try {
+          var scale = Math.min(100 / w, 100 / h, 1);
+          var tw = Math.round(w * scale) || 1;
+          var th = Math.round(h * scale) || 1;
+          var osc = new OffscreenCanvas(tw, th);
+          var ctx = osc.getContext('2d');
+          ctx.drawImage(bmp, 0, 0, tw, th);
+          var tBlob = await osc.convertToBlob({ type: 'image/jpeg', quality: 0.5 });
+          var ab = await tBlob.arrayBuffer();
+          var bytes = new Uint8Array(ab);
+          var binary = '';
+          for (var j = 0; j < bytes.length; j++) binary += String.fromCharCode(bytes[j]);
+          thumbUrl = 'data:image/jpeg;base64,' + btoa(binary);
+        } catch (e) {}
+        bmp.close();
+        results[url] = { width: w, height: h, thumbUrl: thumbUrl };
+      } catch (e) {
+        results[url] = { width: -1, height: -1, thumbUrl: null };
+      }
+    }));
+    /* Cleanup Referer rules after batch */
+    if (pageUrl) {
+      batch.forEach(function(url) { setTimeout(function() { cleanupRefererRule(url); }, 5000); });
+    }
+  }
+  return results;
+}
+
+/* ---- Set Referer rules for thumbnail loading in popup ---- */
+async function setThumbReferers(urls, pageUrl) {
+  if (!pageUrl || !urls || !urls.length) return;
+  /* Group URLs by origin to minimize rules */
+  var origins = {};
+  urls.forEach(function(url) {
+    try {
+      var o = new URL(url).origin;
+      if (!origins[o]) origins[o] = true;
+    } catch (e) {}
+  });
+  /* Set one rule per origin */
+  for (var origin in origins) {
+    var ruleId = ruleIdCounter++;
+    if (ruleIdCounter > 1000000) ruleIdCounter = 1;
+    try {
+      await chrome.declarativeNetRequest.updateDynamicRules({
+        addRules: [{
+          id: ruleId,
+          priority: 1,
+          action: {
+            type: 'modifyHeaders',
+            requestHeaders: [
+              { header: 'Referer', operation: 'set', value: pageUrl },
+              { header: 'Origin', operation: 'set', value: new URL(pageUrl).origin }
+            ]
+          },
+          condition: {
+            urlFilter: origin + '/*',
+            resourceTypes: ['image']
+          }
+        }],
+        removeRuleIds: [ruleId]
+      });
+      /* Auto-cleanup after 60s */
+      (function(id) {
+        setTimeout(function() {
+          try { chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [id] }); } catch(e) {}
+        }, 60000);
+      })(ruleId);
+    } catch (e) {}
+  }
+}
 
 /* ---- Queue Log ---- */
 function addQueueLog(msg, type) {

@@ -8,7 +8,7 @@
 
 ### Intelligent Page Scanning
 
-Automatically detects downloadable resources from **19 different sources** on any web page:
+Automatically detects downloadable resources from **20 different sources** on any web page:
 
 | Source | Description |
 |--------|-------------|
@@ -31,6 +31,7 @@ Automatically detects downloadable resources from **19 different sources** on an
 | Regex Fallback | Full-page HTML regex scan |
 | Deep URL | Nested URLs in query parameters and paths |
 | CDN Unwrap | Decode CDN/proxy wrapped URLs (Cloudflare, imgix, Google cache, etc.) |
+| DOM Dimensions | Collect image dimensions directly from page DOM during scan |
 
 ### File Format Support
 
@@ -54,7 +55,19 @@ Automatically detects downloadable resources from **19 different sources** on an
 | Image Dimensions | Min/max width and height filters |
 | Quick Presets | ≥100px, ≥300px, ≥500px, ≥1024×768, ≥1080p |
 
-Image dimensions are automatically probed by loading images in the background (batch of 10, 5s timeout per image).
+Image dimensions are probed via a 3-tier strategy for maximum accuracy:
+
+1. **DOM direct read** — During page scan, reads `naturalWidth`/`naturalHeight` from existing `<img>` elements (instant, zero network cost)
+2. **Content script lookup** — For unresolved images, queries the content script running in the page context
+3. **Background fetch** — Service worker fetches remaining images with correct `Referer` header injection (bypasses anti-hotlink protection)
+
+### Thumbnail Previews (Anti-Hotlink Aware)
+
+- Thumbnails load directly from the original URL
+- If blocked by anti-hotlink / CORS, automatically retries via background service worker proxy
+- Background uses `declarativeNetRequest` to inject the correct `Referer` and `Origin` headers before fetching
+- Fetched images are resized to 200px thumbnails via `OffscreenCanvas` and returned as `data:` URLs
+- `Referer` rules are pre-set for all image domains before rendering, enabling direct `<img>` loading on most anti-hotlink sites
 
 ### 🛡️ Anti-Detection (Stealth Mode)
 
@@ -62,7 +75,7 @@ Avoid triggering download rate limits or bot detection:
 
 - **Random Delay** — Configurable range from 0.1s to 5.0s between downloads
 - **Random Order** — Fisher-Yates shuffle to randomize download sequence
-- **Referer Spoofing** — Dynamically injects `Referer` and `Origin` headers via `declarativeNetRequest`
+- **Referer Spoofing** — Dynamically injects `Referer` and `Origin` headers via `declarativeNetRequest` (downloads + thumbnails)
 - **Concurrency Control** — Limit parallel downloads from 1 to 5
 
 ### Download Queue
@@ -122,8 +135,8 @@ BatchFileDownloader/
 ├── manifest.json      # Extension manifest (MV3)
 ├── popup.html         # Popup UI (HTML + CSS)
 ├── popup.js           # Popup logic (scan, filter, download, settings)
-├── background.js      # Service worker (download queue, Referer injection)
-├── content.js         # Content script (page info)
+├── background.js      # Service worker (download queue, Referer injection, image proxy)
+├── content.js         # Content script (page info, DOM image dimension probing)
 ├── i18n.js            # Internationalization (17 languages)
 └── icons/             # Extension icons (16/48/128px)
 ```

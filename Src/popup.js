@@ -344,6 +344,7 @@ scanBtn.addEventListener('click', function() {
       var found = results[0].result;
       found.forEach(function(f) { f.pageUrl = tab.url; });
       allFiles = found;
+      _thumbRulesSet = false; /* Reset so Referer rules get set for new scan */
       addLog(I18N.fmt('scanDone', found.length), 'success');
 
       /* Probe image dimensions if needed */
@@ -352,18 +353,26 @@ scanBtn.addEventListener('click', function() {
         var ext = (f.name.split('.').pop() || '').toLowerCase();
         return imgExts.indexOf(ext) >= 0;
       });
-      if (imgs.length > 0) {
-        isProbing = true;
-        addLog(I18N.fmt('probingImg', imgs.length), 'info');
-        probeImageDimensions(imgs, function() {
-          isProbing = false;
-          addLog(I18N.t('probeDone'), 'success');
-          applyFilter();
-          resetScanBtn();
-        });
-      } else {
+      /* Only probe images that scanPage didn't already get dimensions for */
+      var needProbe = imgs.filter(function(f) {
+        return !(f.width > 0 && f.height > 0);
+      });
+
+      function afterDimensions() {
         applyFilter();
         resetScanBtn();
+      }
+
+      if (needProbe.length > 0) {
+        isProbing = true;
+        addLog(I18N.fmt('probingImg', needProbe.length), 'info');
+        probeImageDimensions(tab.id, needProbe, function() {
+          isProbing = false;
+          addLog(I18N.t('probeDone'), 'success');
+          afterDimensions();
+        });
+      } else {
+        afterDimensions();
       }
     });
   });
@@ -688,6 +697,34 @@ function scanPage(exts) {
     } catch (e) {}
   });
 
+  /* ========= 20. Collect image dimensions from DOM ========= */
+  var dimImgExts = {jpg:1,jpeg:1,png:1,gif:1,webp:1,bmp:1,ico:1,tif:1,tiff:1,avif:1,svg:1};
+  var domDims = {};
+  var dimLazyAttrs = ['data-src','data-original','data-lazy-src','data-lazy',
+    'data-full-size','data-hi-res','data-original-src','data-zoom-src',
+    'data-raw-src','data-actualsrc','data-url','data-image','data-img-src','data-image-src'];
+  document.querySelectorAll('img').forEach(function(img) {
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+      var srcs = [img.src, img.currentSrc];
+      dimLazyAttrs.forEach(function(a) {
+        var v = img.getAttribute(a); if (v) srcs.push(v);
+      });
+      srcs.forEach(function(s) {
+        if (!s) return;
+        try {
+          var full = new URL(s, document.baseURI).href;
+          if (!domDims[full]) domDims[full] = { w: img.naturalWidth, h: img.naturalHeight };
+        } catch(e) {}
+      });
+    }
+  });
+  results.forEach(function(r) {
+    if (dimImgExts[r.ext]) {
+      var d = domDims[r.url];
+      if (d) { r.width = d.w; r.height = d.h; }
+    }
+  });
+
   return results;
 }
 
@@ -798,7 +835,29 @@ function applyFilter() {
     fileCount.textContent = I18N.fmt('totalFiles', displayFiles.length);
   }
 
-  renderFileList();
+  /* Before rendering, ensure Referer rules are set for image domains */
+  ensureThumbReferers(function() {
+    renderFileList();
+  });
+}
+
+/* Set Referer rules for image thumbnails before rendering */
+var _thumbRulesSet = false;
+function ensureThumbReferers(callback) {
+  if (_thumbRulesSet) { callback(); return; }
+  var thumbExtsCheck = {jpg:1,jpeg:1,png:1,gif:1,webp:1,bmp:1,ico:1,tif:1,tiff:1,avif:1,svg:1};
+  var imgUrls = allFiles.filter(function(f) {
+    return thumbExtsCheck[f.ext.toLowerCase()] === 1;
+  }).map(function(f) { return f.url; });
+  var pageUrl = allFiles.length > 0 ? allFiles[0].pageUrl : '';
+  if (imgUrls.length > 0 && pageUrl) {
+    chrome.runtime.sendMessage({ action: 'setThumbReferers', urls: imgUrls, pageUrl: pageUrl }, function() {
+      _thumbRulesSet = true;
+      callback();
+    });
+  } else {
+    callback();
+  }
 }
 
 function renderFileList() {
@@ -855,7 +914,20 @@ function renderFileList() {
       thumb.loading = 'lazy';
       thumb.decoding = 'async';
       thumb.addEventListener('load', function() { thumb.classList.remove('loading'); });
-      thumb.addEventListener('error', function() { thumb.classList.add('error'); });
+      thumb.addEventListener('error', (function(fileObj, imgEl) {
+        return function() {
+          if (imgEl.dataset.retried) { imgEl.classList.add('error'); return; }
+          imgEl.dataset.retried = '1';
+          /* Direct load failed (anti-hotlink/CORS) - ask background to fetch with correct Referer */
+          chrome.runtime.sendMessage({ action: 'fetchImageAsDataUrl', url: fileObj.url, pageUrl: fileObj.pageUrl }, function(resp) {
+            if (resp && resp.dataUrl) {
+              imgEl.src = resp.dataUrl;
+            } else {
+              imgEl.classList.add('error');
+            }
+          });
+        };
+      })(f, thumb));
       thumb.addEventListener('mouseenter', function(e) { showThumbPreview(f.url, e); });
       thumb.addEventListener('mousemove', function(e) { moveThumbPreview(e); });
       thumb.addEventListener('mouseleave', function() { hideThumbPreview(); });
@@ -969,47 +1041,89 @@ deselectAllBtn.addEventListener('click', function() {
 });
 
 /* ============================================================
- * Image Dimension Probing
+ * Batch Thumbnail Fetching (via background service worker)
+ * ============================================================
+ * Background service worker has full <all_urls> host permissions.
+ * It fetches each image, uses createImageBitmap + OffscreenCanvas
+ * to generate a small JPEG data-URL thumbnail. Data URLs are
+ * always loadable by <img> regardless of CSP or CORS.
  * ============================================================ */
-function probeImageDimensions(imgs, callback) {
+function batchFetchThumbnails(imgs, callback) {
+  var BATCH = 3;
   var idx = 0;
-  var batchSize = 10;
   function nextBatch() {
     if (idx >= imgs.length) { callback(); return; }
-    var batch = imgs.slice(idx, idx + batchSize);
-    idx += batchSize;
-    var remaining = batch.length;
-    batch.forEach(function(f) {
-      var img = new Image();
-      var done = false;
-      var timer = setTimeout(function() {
-        if (done) return;
-        done = true;
-        img.src = '';
-        f.width = -1;
-        f.height = -1;
-        if (--remaining <= 0) nextBatch();
-      }, 5000);
-      img.onload = function() {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        f.width = img.naturalWidth;
-        f.height = img.naturalHeight;
-        if (--remaining <= 0) nextBatch();
-      };
-      img.onerror = function() {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        f.width = -1;
-        f.height = -1;
-        if (--remaining <= 0) nextBatch();
-      };
-      img.src = f.url;
+    var batch = imgs.slice(idx, idx + BATCH);
+    idx += BATCH;
+    var urls = batch.map(function(f) { return f.url; });
+    chrome.runtime.sendMessage({ action: 'probeImages', urls: urls }, function(results) {
+      if (chrome.runtime.lastError) results = {};
+      if (!results) results = {};
+      batch.forEach(function(f) {
+        var r = results[f.url];
+        if (r && r.thumbUrl) {
+          f.thumbUrl = r.thumbUrl;
+          /* Also fill in dimensions if still missing */
+          if (!(f.width > 0) && r.width > 0) f.width = r.width;
+          if (!(f.height > 0) && r.height > 0) f.height = r.height;
+        }
+      });
+      nextBatch();
     });
   }
   nextBatch();
+}
+
+/* ============================================================
+ * Image Dimension Probing (via content script + background)
+ * ============================================================
+ * 1. Ask content script for DOM-based dimensions (instant)
+ * 2. For remaining images, ask background (service worker) to
+ *    fetch & probe — it has full host permissions (bypasses CORS)
+ * ============================================================ */
+function probeImageDimensions(tabId, imgs, callback) {
+  var urls = imgs.map(function(f) { return f.url; });
+
+  /* Phase 1: content script DOM lookup */
+  chrome.tabs.sendMessage(tabId, { action: 'probeImageDimensions', urls: urls }, function(csResults) {
+    if (chrome.runtime.lastError) csResults = {};
+    if (!csResults) csResults = {};
+
+    var remaining = [];
+    imgs.forEach(function(f) {
+      var dim = csResults[f.url];
+      if (dim && dim.width > 0 && dim.height > 0) {
+        f.width = dim.width;
+        f.height = dim.height;
+      } else {
+        remaining.push(f);
+      }
+    });
+
+    if (remaining.length === 0) { callback(); return; }
+
+    /* Phase 2: background service worker fetch (has host permissions) */
+    var remUrls = remaining.map(function(f) { return f.url; });
+    var pageUrl = remaining.length > 0 ? remaining[0].pageUrl : '';
+    chrome.runtime.sendMessage({ action: 'probeImages', urls: remUrls, pageUrl: pageUrl }, function(bgResults) {
+      if (chrome.runtime.lastError) bgResults = {};
+      if (!bgResults) bgResults = {};
+
+      remaining.forEach(function(f) {
+        var dim = bgResults[f.url];
+        if (dim && dim.width > 0 && dim.height > 0) {
+          f.width = dim.width;
+          f.height = dim.height;
+          f.thumbUrl = dim.thumbUrl || null;
+        } else {
+          f.width = -1;
+          f.height = -1;
+          f.thumbUrl = null;
+        }
+      });
+      callback();
+    });
+  });
 }
 
 /* ============================================================
