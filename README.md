@@ -1,6 +1,6 @@
 # Batch File Downloader
 
-> Smart batch download files from any web page with anti-detection ¡ª Chrome Extension (Manifest V3)
+> Smart batch download files from any web page with anti-detection â€” Chrome Extension (Manifest V3)
 
 ![Chrome](https://img.shields.io/badge/Chrome-MV3-brightgreen) ![Languages](https://img.shields.io/badge/i18n-17%20languages-blue) ![License](https://img.shields.io/badge/license-MIT-orange)
 
@@ -52,18 +52,18 @@ Automatically detects downloadable resources from **19 different sources** on an
 | Case Sensitive | Toggle with `Alt+C` |
 | Whole Word | Toggle with `Alt+W` |
 | Image Dimensions | Min/max width and height filters |
-| Quick Presets | ¡İ100px, ¡İ300px, ¡İ500px, ¡İ1024¡Á768, ¡İ1080p |
+| Quick Presets | â‰¥100px, â‰¥300px, â‰¥500px, â‰¥1024Ã—768, â‰¥1080p |
 
 Image dimensions are automatically probed by loading images in the background (batch of 10, 5s timeout per image).
 
-### ? Anti-Detection (Stealth Mode)
+### ğŸ›¡ï¸ Anti-Detection (Stealth Mode)
 
 Avoid triggering download rate limits or bot detection:
 
-- **Random Delay** ¡ª Configurable range from 0.1s to 5.0s between downloads
-- **Random Order** ¡ª Fisher-Yates shuffle to randomize download sequence
-- **Referer Spoofing** ¡ª Dynamically injects `Referer` and `Origin` headers via `declarativeNetRequest`
-- **Concurrency Control** ¡ª Limit parallel downloads from 1 to 5
+- **Random Delay** â€” Configurable range from 0.1s to 5.0s between downloads
+- **Random Order** â€” Fisher-Yates shuffle to randomize download sequence
+- **Referer Spoofing** â€” Dynamically injects `Referer` and `Origin` headers via `declarativeNetRequest`
+- **Concurrency Control** â€” Limit parallel downloads from 1 to 5
 
 ### Download Queue
 
@@ -81,18 +81,18 @@ Avoid triggering download rate limits or bot detection:
 
 Auto-detects browser language with manual override:
 
-English, ¼òÌåÖĞÎÄ, ·±ówÖĞÎÄ, ÈÕ±¾ÕZ, ???, Fran?ais, Deutsch, Espa?ol, ??????, ???????, Portugu¨ºs (BR), §²§å§ã§ã§Ü§Ú§Û, Bahasa Indonesia, Ti?ng Vi?t, T¨¹rk?e, Italiano, ???
+English, ç®€ä½“ä¸­æ–‡, ç¹é«”ä¸­æ–‡, æ—¥æœ¬èª, í•œêµ­ì–´, FranÃ§ais, Deutsch, EspaÃ±ol, à¤¹à¤¿à¤¨à¥à¤¦à¥€, Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©, PortuguÃªs (BR), Ğ ÑƒÑÑĞºĞ¸Ğ¹, Bahasa Indonesia, Tiáº¿ng Viá»‡t, TÃ¼rkÃ§e, Italiano, à¸ à¸²à¸©à¸²à¹„à¸—à¸¢
 
 ### UI
 
-- **Dual-tab layout** ¡ª Download tab + Settings tab
-- **Dark mode** ¡ª Follows system `prefers-color-scheme`
-- **Thumbnail previews** ¡ª Image files show thumbnails with hover zoom
-- **Source labels** ¡ª Color-coded badges (Link / Image / CSS / Media, etc.)
-- **Dimension labels** ¡ª Width¡ÁHeight display for probed images
+- **Dual-tab layout** â€” Download tab + Settings tab
+- **Dark mode** â€” Follows system `prefers-color-scheme`
+- **Thumbnail previews** â€” Image files show thumbnails with hover zoom
+- **Source labels** â€” Color-coded badges (Link / Image / CSS / Media, etc.)
+- **Dimension labels** â€” WidthÃ—Height display for probed images
 - **Select All / Deselect All**
-- **First-use tips** ¡ª Guides users to allow automatic downloads in Chrome
-- **Reset All Filters** ¡ª One-click restore to defaults
+- **First-use tips** â€” Guides users to allow automatic downloads in Chrome
+- **Reset All Filters** â€” One-click restore to defaults
 - **All settings auto-saved** and restored on next open
 
 ## Installation
@@ -119,13 +119,13 @@ English, ¼òÌåÖĞÎÄ, ·±ówÖĞÎÄ, ÈÕ±¾ÕZ, ???, Fran?ais, Deutsch, Espa?ol, ??????, ??
 
 ```
 BatchFileDownloader/
-©À©¤©¤ manifest.json      # Extension manifest (MV3)
-©À©¤©¤ popup.html         # Popup UI (HTML + CSS)
-©À©¤©¤ popup.js           # Popup logic (scan, filter, download, settings)
-©À©¤©¤ background.js      # Service worker (download queue, Referer injection)
-©À©¤©¤ content.js         # Content script (page info)
-©À©¤©¤ i18n.js            # Internationalization (17 languages)
-©¸©¤©¤ icons/             # Extension icons (16/48/128px)
+â”œâ”€â”€ manifest.json      # Extension manifest (MV3)
+â”œâ”€â”€ popup.html         # Popup UI (HTML + CSS)
+â”œâ”€â”€ popup.js           # Popup logic (scan, filter, download, settings)
+â”œâ”€â”€ background.js      # Service worker (download queue, Referer injection)
+â”œâ”€â”€ content.js         # Content script (page info)
+â”œâ”€â”€ i18n.js            # Internationalization (17 languages)
+â””â”€â”€ icons/             # Extension icons (16/48/128px)
 ```
 
 ## Requirements
