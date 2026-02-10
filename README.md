@@ -4,6 +4,8 @@
 
 ![Chrome](https://img.shields.io/badge/Chrome-MV3-brightgreen) ![Languages](https://img.shields.io/badge/i18n-17%20languages-blue) ![License](https://img.shields.io/badge/license-MIT-orange)
 
+**GitHub:** [https://github.com/piggyy/Batch-File-Downloader](https://github.com/piggyy/Batch-File-Downloader)
+
 ## Features
 
 ### Intelligent Page Scanning
@@ -100,6 +102,7 @@ English, 简体中文, 繁體中文, 日本語, 한국어, Français, Deutsch, E
 
 - **Dual-tab layout** — Download tab + Settings tab
 - **Dark mode** — Follows system `prefers-color-scheme`
+- **GitHub link** — Header icon linking to the open-source repository
 - **Thumbnail previews** — Image files show thumbnails with hover zoom
 - **Source labels** — Color-coded badges (Link / Image / CSS / Media, etc.)
 - **Dimension labels** — Width×Height display for probed images
@@ -140,6 +143,10 @@ BatchFileDownloader/
 ├── i18n.js            # Internationalization (17 languages)
 └── icons/             # Extension icons (16/48/128px)
 ```
+
+## Security
+
+- URL scheme validation is case-insensitive to prevent bypass via mixed-case schemes (e.g. `JAVASCRIPT:`, `Data:`, `BLOB:`)
 
 ## Requirements
 
