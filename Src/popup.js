@@ -396,7 +396,9 @@ function scanPage(exts) {
     try {
       if (!url || typeof url !== 'string') return;
       url = url.trim();
-      if (!url || url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('javascript:')) return;
+      if (!url) return;
+      var lower = url.toLowerCase();
+      if (lower.startsWith('data:') || lower.startsWith('blob:') || lower.startsWith('javascript:')) return;
       var full = new URL(url, document.baseURI).href;
       if (seen[full]) return;
       var path = full.split('?')[0].split('#')[0];
