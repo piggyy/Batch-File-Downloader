@@ -401,10 +401,22 @@ function scanPage(exts) {
       if (lower.startsWith('data:') || lower.startsWith('blob:') || lower.startsWith('javascript:')) return;
       var full = new URL(url, document.baseURI).href;
       if (seen[full]) return;
-      var path = full.split('?')[0].split('#')[0];
+      var u = new URL(full);
+      var path = u.pathname;
       var name = path.split('/').pop() || '';
       if (!name) return;
-      var ext = name.split('.').pop().toLowerCase();
+      var ext = name.indexOf('.') !== -1 ? name.split('.').pop().toLowerCase() : '';
+      /* Fallback: check query params for format when path has no extension
+         (e.g. x.com/Twitter: pbs.twimg.com/media/ID?format=jpg&name=large) */
+      if (!ext || !extSet[ext]) {
+        var fmtParam = u.searchParams.get('format') || u.searchParams.get('fmt') ||
+                       u.searchParams.get('f') || u.searchParams.get('type') ||
+                       u.searchParams.get('ext');
+        if (fmtParam) {
+          ext = fmtParam.toLowerCase();
+          name = name + '.' + ext;
+        }
+      }
       if (!extSet[ext]) return;
       seen[full] = true;
       results.push({ url: full, name: name, ext: ext, source: source });
