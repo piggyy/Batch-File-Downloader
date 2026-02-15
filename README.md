@@ -2,15 +2,21 @@
 
 > Smart batch download files from any web page with anti-detection — Chrome Extension (Manifest V3)
 
-![Chrome](https://img.shields.io/badge/Chrome-MV3-brightgreen) ![Languages](https://img.shields.io/badge/i18n-17%20languages-blue) ![License](https://img.shields.io/badge/license-MIT-orange)
+![Version](https://img.shields.io/badge/version-1.1.0-blue) ![Chrome](https://img.shields.io/badge/Chrome-MV3-brightgreen) ![Languages](https://img.shields.io/badge/i18n-17%20languages-blue) ![License](https://img.shields.io/badge/license-MIT-orange)
 
 **GitHub:** [https://github.com/piggyy/Batch-File-Downloader](https://github.com/piggyy/Batch-File-Downloader)
+
+## Screenshots
+
+| Main Interface | Settings & Filters | Download Queue |
+|:-:|:-:|:-:|
+| ![Main](Screenshot/s1.PNG) | ![Settings](Screenshot/s2.PNG) | ![Queue](Screenshot/s3.PNG) |
 
 ## Features
 
 ### Intelligent Page Scanning
 
-Automatically detects downloadable resources from **20 different sources** on any web page:
+Automatically detects downloadable resources from **21 different sources** on any web page:
 
 | Source | Description |
 |--------|-------------|
@@ -34,6 +40,7 @@ Automatically detects downloadable resources from **20 different sources** on an
 | Deep URL | Nested URLs in query parameters and paths |
 | CDN Unwrap | Decode CDN/proxy wrapped URLs (Cloudflare, imgix, Google cache, etc.) |
 | DOM Dimensions | Collect image dimensions directly from page DOM during scan |
+| Query Param Format | Extract file format from URL query parameters (`format`, `fmt`, `f`, `type`, `ext`) for extensionless URLs (e.g. Twitter/X `pbs.twimg.com/media/ID?format=jpg`) |
 
 ### File Format Support
 
@@ -135,13 +142,18 @@ English, 简体中文, 繁體中文, 日本語, 한국어, Français, Deutsch, E
 
 ```
 BatchFileDownloader/
-├── manifest.json      # Extension manifest (MV3)
-├── popup.html         # Popup UI (HTML + CSS)
-├── popup.js           # Popup logic (scan, filter, download, settings)
-├── background.js      # Service worker (download queue, Referer injection, image proxy)
-├── content.js         # Content script (page info, DOM image dimension probing)
-├── i18n.js            # Internationalization (17 languages)
-└── icons/             # Extension icons (16/48/128px)
+├── Src/
+│   ├── manifest.json      # Extension manifest (MV3)
+│   ├── popup.html         # Popup UI (HTML + CSS)
+│   ├── popup.js           # Popup logic (scan, filter, download, settings)
+│   ├── background.js      # Service worker (download queue, Referer injection, image proxy)
+│   ├── content.js         # Content script (page info, DOM image dimension probing)
+│   ├── i18n.js            # Internationalization (17 languages)
+│   └── icons/             # Extension icons (16/48/128px)
+├── Screenshot/            # Extension screenshots
+├── PRIVACY_POLICY.md      # Privacy policy
+├── LICENSE                # MIT License
+└── README.md
 ```
 
 ## Security
@@ -153,6 +165,10 @@ BatchFileDownloader/
 - Google Chrome 110+ (Manifest V3)
 - Chromium-based browsers (Edge, Brave, etc.) should also work
 
+## Privacy Policy
+
+See [PRIVACY_POLICY.md](PRIVACY_POLICY.md) for details.
+
 ## License
 
- MIT
+MIT — see [LICENSE](LICENSE) for details.
